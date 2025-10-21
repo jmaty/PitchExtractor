@@ -56,7 +56,7 @@ class Trainer:
             "steps": self.steps,
             "epochs": self.epochs,
         }
-        state_dict["model"] = self.model.state_dict()
+        state_dict["net"] = self.model.state_dict()
 
         if not os.path.exists(os.path.dirname(checkpoint_path)):
             os.makedirs(os.path.dirname(checkpoint_path))
@@ -69,7 +69,7 @@ class Trainer:
             load_only_params (bool): Whether to load only model parameters.
         """
         state_dict = torch.load(checkpoint_path, map_location="cpu")
-        self._load(state_dict["model"], self.model)
+        self._load(state_dict["net"], self.model)
 
         if not load_only_params:
             self.steps = state_dict["steps"]
@@ -155,7 +155,7 @@ class Trainer:
                 train_losses[f"train/{key}"].append(value)
 
         train_losses = {key: np.mean(value) for key, value in train_losses.items()}
-        train_losses["train/learning_rate"] = self._get_lr()
+        train_losses["train/lr"] = self._get_lr()
         return train_losses
 
     @torch.no_grad()

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import argparse
 import logging
 import os
@@ -43,6 +45,7 @@ def get_data_path_list(train_path=None, val_path=None):
 def main():
     parser = argparse.ArgumentParser(description="Pitch and voicing training")
     parser.add_argument("config_path", type=str, help="path to config")
+    parser.add_argument("--num_workers", type=int, default=4, help="number of workers")
     args = parser.parse_args()
 
     config = yaml.safe_load(open(args.config_path, encoding="utf-8"))
@@ -51,21 +54,21 @@ def main():
         os.mkdir(log_dir)
     shutil.copy(args.config_path, osp.join(log_dir, osp.basename(args.config_path)))
 
+    # Write logs
     writer = SummaryWriter(log_dir + "/tensorboard")
-
-    # write logs
     file_handler = logging.FileHandler(osp.join(log_dir, "train.log"))
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter("%(levelname)s:%(asctime)s: %(message)s"))
     logger.addHandler(file_handler)
 
+    # Default parameters
     batch_size = config.get("batch_size", 32)
     device = config.get("device", "cpu")
     epochs = config.get("epochs", 100)
     save_freq = config.get("save_freq", 10)
     train_path = config.get("train_data", None)
     val_path = config.get("val_data", None)
-    num_workers = config.get("num_workers", 8)
+    num_workers = args.num_workers
 
     train_list, val_list = get_data_path_list(train_path, val_path)
 
@@ -86,7 +89,7 @@ def main():
         dataset_config=config.get("dataset_params", {}),
     )
 
-    # define model
+    # Define model
     model = JDCNet(num_class=1)  # num_class = 1 means regression
 
     scheduler_params = {
@@ -145,7 +148,7 @@ def main():
                 writer.add_scalar(key, value, epoch)
             else:
                 writer.add_figure(key, (value), epoch)
-        if (epoch % save_freq) == 0:
+        if epoch % save_freq == 0:
             trainer.save_checkpoint(osp.join(log_dir, f"epoch_{epoch:05d}.pth"))
 
     return 0
