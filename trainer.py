@@ -133,6 +133,7 @@ class Trainer:
         batch = [b.to(self.device) for b in batch]
 
         x, f0, sil = batch
+        # Predict F0 (Hz) and silence probability
         f0_pred, sil_pred = self.model(x.transpose(-1, -2))
 
         loss_f0 = self.loss_config["lambda_f0"] * self.criterion["l1"](f0_pred.squeeze(), f0)
@@ -145,7 +146,7 @@ class Trainer:
 
         return {"loss": loss.item(), "f0": loss_f0.item(), "sil": loss_sil.item()}
 
-    def _train_epoch(self):
+    def train_epoch(self):
         self.epochs += 1
         train_losses = defaultdict(list)
         self.model.train()
@@ -159,7 +160,7 @@ class Trainer:
         return train_losses
 
     @torch.no_grad()
-    def _eval_epoch(self):
+    def eval_epoch(self):
         self.model.eval()
         eval_losses = defaultdict(list)
         eval_images = defaultdict(list)

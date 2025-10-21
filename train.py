@@ -137,8 +137,8 @@ def main():
     print("All F0 data is computed.")
 
     for epoch in range(1, epochs + 1):
-        train_results = trainer._train_epoch()  # pylint: disable=protected-access
-        eval_results = trainer._eval_epoch()  # pylint: disable=protected-access
+        train_results = trainer.train_epoch()
+        eval_results = trainer.eval_epoch()
         results = train_results.copy()
         results.update(eval_results)
         logger.info("--- epoch %d ---", epoch)
