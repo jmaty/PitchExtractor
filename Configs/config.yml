@@ -4,9 +4,9 @@ device: "cuda"
 epochs: 100
 batch_size: 64
 pretrained_model: ""
-train_data: "Data/train_list.txt"
-val_data: "Data/val_list.txt"
-num_workers: 16
+train_data: "Data/train_MGW500.csv"
+val_data: "Data/valid_MGW100.csv"
+# num_workers: 16  # 16
 
   
 optimizer_params:
@@ -14,4 +14,3 @@ optimizer_params:
   
 loss_params:
   lambda_f0: 0.1
-  
