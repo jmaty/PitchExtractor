@@ -68,8 +68,8 @@ def main():
     logger.addHandler(file_handler)
 
     # Default parameters
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = config.get("batch_size", 32)
-    device = config.get("device", "cpu")
     epochs = config.get("epochs", 100)
     save_freq = config.get("save_freq", 10)
     train_path = config.get("train_data", None)
