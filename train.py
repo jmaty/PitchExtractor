@@ -46,6 +46,12 @@ def main():
     parser = argparse.ArgumentParser(description="Pitch and voicing training")
     parser.add_argument("config_path", type=str, help="path to config")
     parser.add_argument("--num_workers", type=int, default=4, help="number of workers")
+    parser.add_argument(
+        "--precompute_f0",
+        type=bool,
+        default=False,
+        help="only precompute F0 features",
+    )
     args = parser.parse_args()
 
     config = yaml.safe_load(open(args.config_path, encoding="utf-8"))
@@ -89,6 +95,19 @@ def main():
         dataset_config=config.get("dataset_params", {}),
     )
 
+    # Precompute all F0 for training and validation data
+    print("Checking if all F0 data is computed...")
+    for _ in enumerate(train_dataloader):
+        continue
+    for _ in enumerate(val_dataloader):
+        continue
+    print("All F0 data is computed.")
+
+    # Exit if only precomputing F0
+    if args.precompute_f0:
+        print("F0 precomputed, exiting.")
+        return 0
+
     # Define model
     model = JDCNet(num_class=1)  # num_class = 1 means regression
 
@@ -101,7 +120,11 @@ def main():
 
     model.to(device)
     optimizer, scheduler = build_optimizer(
-        {"params": model.parameters(), "optimizer_params": {}, "scheduler_params": scheduler_params}
+        {
+            "params": model.parameters(),
+            "optimizer_params": {},
+            "scheduler_params": scheduler_params,
+        }
     )
 
     criterion = {
@@ -127,14 +150,6 @@ def main():
         trainer.load_checkpoint(
             config["pretrained_model"], load_only_params=config.get("load_only_params", True)
         )
-
-    # compute all F0 for training and validation data
-    print("Checking if all F0 data is computed...")
-    for _ in enumerate(train_dataloader):
-        continue
-    for _ in enumerate(val_dataloader):
-        continue
-    print("All F0 data is computed.")
 
     for epoch in range(1, epochs + 1):
         train_results = trainer.train_epoch()
