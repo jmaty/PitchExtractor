@@ -9,7 +9,8 @@ val_data: "Data/valid_MGW+CRo200.csv"
 # num_workers: 16  # 16
   
 optimizer_params:
-  lr: 0.0003. # (0.0003)
+  lr: 0.0003. # (0.0003, 0.0005)
+  pct_start: 0.0 # (0.0)
   
 loss_params:
   lambda_f0: 0.1
