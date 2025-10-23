@@ -71,7 +71,7 @@ class Trainer:
         """Load checkpoint.
         Args:
             checkpoint_path (str): Checkpoint path to be loaded.
-            load_only_params (bool): Whether to load only model parameters.
+            load_only_params (bool): Whether to load only model parameters (useful for fine-tuning).
         """
         state_dict = torch.load(checkpoint_path, map_location="cpu")
 
