@@ -86,12 +86,12 @@ def main():
     # Set device
     device = acc.device
 
-    train_list, val_list = get_data_path_list(cfg.train_path, cfg.val_path)
+    train_list, val_list = get_data_path_list(cfg.train_data, cfg.val_data)
 
     train_dataloader = build_dataloader(
         train_list,
         batch_size=cfg.batch_size,
-        num_workers=cfg.num_workers,
+        num_workers=args.num_workers,
         dataset_config=cfg.get("dataset_params", {}),
         device=device,
     )
@@ -100,7 +100,7 @@ def main():
         val_list,
         batch_size=cfg.batch_size,
         validation=True,
-        num_workers=cfg.num_workers // 2,
+        num_workers=args.num_workers // 2,
         device=device,
         dataset_config=cfg.get("dataset_params", {}),
     )
