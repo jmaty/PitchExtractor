@@ -16,14 +16,14 @@ logger.setLevel(logging.DEBUG)
 class Trainer:
     def __init__(
         self,
+        accelerator,
         model=None,
         criterion=None,
         optimizer=None,
         scheduler=None,
-        config={},
-        loss_config={},
+        config=None,
+        loss_config=None,
         device=torch.device("cpu"),
-        logger=logger,
         train_dataloader=None,
         val_dataloader=None,
         initial_steps=0,
@@ -38,12 +38,12 @@ class Trainer:
         self.scheduler = scheduler
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
-        self.config = config
-        self.loss_config = loss_config
+        self.config = config if config is not None else {}
+        self.loss_config = loss_config if loss_config is not None else {}
         self.device = device
-        self.finish_train = False
-        self.logger = logger
-        self.fp16_run = False
+        # self.finish_train = False
+        self.logger = logger  # Use module-level logger
+        self.accelerator = accelerator
 
     def save_checkpoint(self, checkpoint_path):
         """Save checkpoint.
@@ -56,11 +56,16 @@ class Trainer:
             "steps": self.steps,
             "epochs": self.epochs,
         }
-        state_dict["net"] = self.model.state_dict()
+
+        # Use accelerator to get unwrapped model for saving
+        state_dict["net"] = self.accelerator.unwrap_model(self.model).state_dict()
 
         if not os.path.exists(os.path.dirname(checkpoint_path)):
             os.makedirs(os.path.dirname(checkpoint_path))
-        torch.save(state_dict, checkpoint_path)
+
+        # Only save on main process
+        if self.accelerator.is_main_process:
+            torch.save(state_dict, checkpoint_path)
 
     def load_checkpoint(self, checkpoint_path, load_only_params=False):
         """Load checkpoint.
@@ -69,7 +74,9 @@ class Trainer:
             load_only_params (bool): Whether to load only model parameters.
         """
         state_dict = torch.load(checkpoint_path, map_location="cpu")
-        self._load(state_dict["net"], self.model)
+
+        # Load into unwrapped model
+        self._load(state_dict["net"], self.accelerator.unwrap_model(self.model))
 
         if not load_only_params:
             self.steps = state_dict["steps"]
@@ -130,8 +137,8 @@ class Trainer:
 
     def run(self, batch):
         self.optimizer.zero_grad()
-        batch = [b.to(self.device) for b in batch]
 
+        # Accelerator automatically moves data to correct device
         x, f0, sil = batch
         # Predict F0 (Hz) and silence probability
         f0_pred, sil_pred = self.model(x.transpose(-1, -2))
@@ -140,7 +147,9 @@ class Trainer:
         loss_sil = self.criterion["ce"](sil_pred, sil)
         loss = loss_f0 + loss_sil
 
-        loss.backward()
+        # Use accelerator backward
+        self.accelerator.backward(loss)
+
         self.optimizer.step()
         self.scheduler.step()
 
@@ -151,9 +160,11 @@ class Trainer:
         train_losses = defaultdict(list)
         self.model.train()
         for _, batch in enumerate(tqdm(self.train_dataloader, desc="[train]"), 1):
-            losses = self.run(batch)
-            for key, value in losses.items():
-                train_losses[f"train/{key}"].append(value)
+            # Use accumulate context manager for gradient accumulation
+            with self.accelerator.accumulate(self.model):
+                losses = self.run(batch)
+                for key, value in losses.items():
+                    train_losses[f"train/{key}"].append(value)
 
         train_losses = {key: np.mean(value) for key, value in train_losses.items()}
         train_losses["train/lr"] = self._get_lr()
@@ -165,7 +176,7 @@ class Trainer:
         eval_losses = defaultdict(list)
         eval_images = defaultdict(list)
         for _, batch in enumerate(tqdm(self.val_dataloader, desc="[eval]"), 1):
-            batch = [b.to(self.device) for b in batch]
+            # Accelerator automatically moves data to correct device
             x, f0, sil = batch
 
             f0_pred, sil_pred = self.model(x.transpose(-1, -2))

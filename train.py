@@ -9,8 +9,10 @@ from logging import StreamHandler
 
 import torch
 import yaml
+from accelerate import Accelerator
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
+from munch import munchify
 
 from meldataset import build_dataloader
 from model import JDCNet
@@ -48,77 +50,98 @@ def main():
     parser.add_argument("--num_workers", type=int, default=4, help="number of workers")
     parser.add_argument(
         "--precompute_f0",
-        type=bool,
+        action="store_true",
         default=False,
         help="only precompute F0 features",
     )
     args = parser.parse_args()
 
-    config = yaml.safe_load(open(args.config_path, encoding="utf-8"))
-    log_dir = config["log_dir"]
-    if not osp.exists(log_dir):
-        os.mkdir(log_dir)
-    shutil.copy(args.config_path, osp.join(log_dir, osp.basename(args.config_path)))
+    cfg = munchify(yaml.safe_load(open(args.config_path, encoding="utf-8")))
 
-    # Write logs
-    writer = SummaryWriter(log_dir + "/tensorboard")
-    file_handler = logging.FileHandler(osp.join(log_dir, "train.log"))
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging.Formatter("%(levelname)s:%(asctime)s: %(message)s"))
-    logger.addHandler(file_handler)
+    # Initialize Accelerator for distributed training
+    acc = Accelerator(
+        mixed_precision=cfg.get("mixed_precision", "no"),  # can be 'fp16', 'bf16', or 'no'
+        gradient_accumulation_steps=cfg.get("grad_accum_steps", 1),
+        log_with="tensorboard",
+    )
 
-    # Default parameters
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    batch_size = config.get("batch_size", 32)
-    epochs = config.get("epochs", 100)
-    save_freq = config.get("save_freq", 10)
-    train_path = config.get("train_data", None)
-    val_path = config.get("val_data", None)
-    num_workers = args.num_workers
+    log_dir = cfg.log_dir
 
-    train_list, val_list = get_data_path_list(train_path, val_path)
+    # Only create directories on main process
+    if acc.is_main_process:
+        if not osp.exists(log_dir):
+            os.mkdir(log_dir)
+        shutil.copy(args.config_path, osp.join(log_dir, osp.basename(args.config_path)))
+
+    # Write logs only on main process
+    if acc.is_main_process:
+        writer = SummaryWriter(log_dir + "/tensorboard")
+        file_handler = logging.FileHandler(osp.join(log_dir, "train.log"))
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter("%(levelname)s:%(asctime)s: %(message)s"))
+        logger.addHandler(file_handler)
+    else:
+        writer = None
+
+    # Set device
+    device = acc.device
+
+    train_list, val_list = get_data_path_list(cfg.train_path, cfg.val_path)
 
     train_dataloader = build_dataloader(
         train_list,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        dataset_config=config.get("dataset_params", {}),
+        batch_size=cfg.batch_size,
+        num_workers=cfg.num_workers,
+        dataset_config=cfg.get("dataset_params", {}),
         device=device,
     )
 
     val_dataloader = build_dataloader(
         val_list,
-        batch_size=batch_size,
+        batch_size=cfg.batch_size,
         validation=True,
-        num_workers=num_workers // 2,
+        num_workers=cfg.num_workers // 2,
         device=device,
-        dataset_config=config.get("dataset_params", {}),
+        dataset_config=cfg.get("dataset_params", {}),
     )
 
+    if acc.is_main_process:
+        logger.info("Mixed precision:              %s", acc.mixed_precision)
+        logger.info("Batch size:                   %d", cfg.batch_size)
+        logger.info("Gradient accumulation steps:  %d", acc.gradient_accumulation_steps)
+        logger.info("Pretrained model:             %s", cfg.get("pretrained_model", ""))
+        logger.info("Training samples:             %d", len(train_list))
+        logger.info("Validation samples:           %d", len(val_list))
+        logger.info("Train batches per epoch:      %d", len(train_dataloader))
+        logger.info("Validation batches per epoch: %d", len(val_dataloader))
+        logger.info("")
+
     # Precompute all F0 for training and validation data
-    print("Checking if all F0 data is computed...")
+    if acc.is_main_process:
+        logger.info("Checking if all F0 data is computed...")
     for _ in enumerate(train_dataloader):
         continue
     for _ in enumerate(val_dataloader):
         continue
-    print("All F0 data is computed.")
+    if acc.is_main_process:
+        logger.info("All F0 data is computed.")
 
     # Exit if only precomputing F0
     if args.precompute_f0:
-        print("F0 precomputed, exiting.")
+        if acc.is_main_process:
+            logger.info("F0 precomputed, exiting.")
         return 0
 
     # Define model
     model = JDCNet(num_class=1)  # num_class = 1 means regression
 
     scheduler_params = {
-        "max_lr": float(config["optimizer_params"].get("lr", 5e-4)),
-        "pct_start": float(config["optimizer_params"].get("pct_start", 0.0)),
-        "epochs": epochs,
+        "max_lr": float(cfg["optimizer_params"].get("lr", 5e-4)),
+        "pct_start": float(cfg["optimizer_params"].get("pct_start", 0.0)),
+        "epochs": cfg.epochs,
         "steps_per_epoch": len(train_dataloader),
     }
 
-    model.to(device)
     optimizer, scheduler = build_optimizer(
         {
             "params": model.parameters(),
@@ -127,14 +150,22 @@ def main():
         }
     )
 
+    # Prepare everything with accelerator
+    model, optimizer, train_dataloader, val_dataloader, scheduler = acc.prepare(
+        model,
+        optimizer,
+        train_dataloader,
+        val_dataloader,
+        scheduler,
+    )
+
     criterion = {
         "l1": nn.SmoothL1Loss(),  # F0 loss (regression)
         "ce": nn.BCEWithLogitsLoss(),  # silence loss (binary classification)
     }
 
-    loss_config = config["loss_params"]
-
     trainer = Trainer(
+        acc,
         model=model,
         criterion=criterion,
         optimizer=optimizer,
@@ -142,29 +173,35 @@ def main():
         device=device,
         train_dataloader=train_dataloader,
         val_dataloader=val_dataloader,
-        loss_config=loss_config,
-        logger=logger,
+        loss_config=cfg.loss_params,
     )
 
-    if config.get("pretrained_model", "") != "":
+    if cfg.get("pretrained_model", "") != "":
         trainer.load_checkpoint(
-            config["pretrained_model"], load_only_params=config.get("load_only_params", True)
+            cfg.pretrained_model,
+            load_only_params=cfg.get("load_only_params", True),
         )
 
-    for epoch in range(1, epochs + 1):
+    for epoch in range(1, cfg.epochs + 1):
         train_results = trainer.train_epoch()
         eval_results = trainer.eval_epoch()
         results = train_results.copy()
         results.update(eval_results)
-        logger.info("--- epoch %d ---", epoch)
-        for key, value in results.items():
-            if isinstance(value, float):
-                logger.info("%-15s: %.4f", key, value)
-                writer.add_scalar(key, value, epoch)
-            else:
-                writer.add_figure(key, (value), epoch)
-        if epoch % save_freq == 0:
-            trainer.save_checkpoint(osp.join(log_dir, f"epoch_{epoch:05d}.pth"))
+
+        # Only log on main process
+        if acc.is_main_process:
+            logger.info("--- epoch %d ---", epoch)
+            for key, value in results.items():
+                if isinstance(value, float):
+                    logger.info("%-15s: %.4f", key, value)
+                    if writer is not None:
+                        writer.add_scalar(key, value, epoch)
+                else:
+                    if writer is not None:
+                        writer.add_figure(key, (value), epoch)
+
+            if epoch % cfg.save_freq == 0:
+                trainer.save_checkpoint(osp.join(log_dir, f"epoch_{epoch:05d}.pth"))
 
     return 0
 
