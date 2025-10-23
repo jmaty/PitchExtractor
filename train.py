@@ -63,8 +63,8 @@ def main():
     acc = Accelerator(
         mixed_precision=cfg.get("mixed_precision", "no"),  # can be 'fp16', 'bf16', or 'no'
         gradient_accumulation_steps=cfg.get("grad_accum_steps", 1),
-        log_with="tensorboard",
-        project_dir=log_dir,
+        # log_with="tensorboard",
+        # project_dir=log_dir,
     )
 
     # Only create directories on main process
