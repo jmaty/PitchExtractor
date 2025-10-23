@@ -21,7 +21,11 @@ class JDCNet(nn.Module):
         # input = (b, 1, 31, 513), b = batch size
         self.conv_block = nn.Sequential(
             nn.Conv2d(
-                in_channels=1, out_channels=64, kernel_size=3, padding=1, bias=False
+                in_channels=1,
+                out_channels=64,
+                kernel_size=3,
+                padding=1,
+                bias=False,
             ),  # out: (b, 64, 31, 513)
             nn.BatchNorm2d(num_features=64),
             nn.LeakyReLU(leaky_relu_slope, inplace=True),
@@ -59,12 +63,20 @@ class JDCNet(nn.Module):
 
         # input: (b, 31, 512) - resized from (b, 256, 31, 2)
         self.bilstm_classifier = nn.LSTM(
-            input_size=512, hidden_size=256, batch_first=True, dropout=0.3, bidirectional=True
+            input_size=512,
+            hidden_size=256,
+            batch_first=True,
+            dropout=0.3,
+            bidirectional=True,
         )  # (b, 31, 512)
 
         # input: (b, 31, 512) - resized from (b, 256, 31, 2)
         self.bilstm_detector = nn.LSTM(
-            input_size=512, hidden_size=256, batch_first=True, dropout=0.3, bidirectional=True
+            input_size=512,
+            hidden_size=256,
+            batch_first=True,
+            dropout=0.3,
+            bidirectional=True,
         )  # (b, 31, 512)
 
         # input: (b * 31, 512)
@@ -122,9 +134,8 @@ class JDCNet(nn.Module):
 
         detector_out = detector_out.contiguous().view((-1, 512))
         detector_out = self.detector(detector_out)
-        detector_out = detector_out.view((-1, seq_len, 2)).sum(
-            axis=-1
-        )  # binary classifier - (b, 31, 2)
+        # binary classifier - (b, 31, 2)
+        detector_out = detector_out.view((-1, seq_len, 2)).sum(axis=-1)
 
         # sizes: (b, 31, 722), (b, 31, 2)
         # classifier output consists of predicted pitch classes per frame
