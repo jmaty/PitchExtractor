@@ -106,14 +106,23 @@ def main():
     )
 
     if acc.is_main_process:
+        tot_effect_batch = cfg.batch_size * acc.num_processes * acc.gradient_accumulation_steps
+        logger.info("=" * 50)
+        logger.info("Training Configuration")
+        logger.info("=" * 50)
+        logger.info("Device:                       %s", device)
+        logger.info("Number of GPUs:               %d", acc.num_processes)
         logger.info("Mixed precision:              %s", acc.mixed_precision)
-        logger.info("Batch size:                   %d", cfg.batch_size)
+        logger.info("Batch size per GPU:           %d", cfg.batch_size)
+        logger.info("Effective batch size:         %d", cfg.batch_size * acc.num_processes)
         logger.info("Gradient accumulation steps:  %d", acc.gradient_accumulation_steps)
+        logger.info("Total effective batch:        %d", tot_effect_batch)
         logger.info("Pretrained model:             %s", cfg.get("pretrained_model", ""))
         logger.info("Training samples:             %d", len(train_list))
         logger.info("Validation samples:           %d", len(val_list))
         logger.info("Train batches per epoch:      %d", len(train_dataloader))
         logger.info("Validation batches per epoch: %d", len(val_dataloader))
+        logger.info("=" * 50)
         logger.info("")
 
     # Precompute all F0 for training and validation data
@@ -179,7 +188,7 @@ def main():
     if cfg.get("pretrained_model", "") != "":
         trainer.load_checkpoint(
             cfg.pretrained_model,
-            load_only_params=cfg.get("load_only_params", True),
+            load_only_params=cfg.get("load_only_params", False),
         )
 
     for epoch in range(1, cfg.epochs + 1):
