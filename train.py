@@ -57,15 +57,15 @@ def main():
     args = parser.parse_args()
 
     cfg = munchify(yaml.safe_load(open(args.config_path, encoding="utf-8")))
+    log_dir = cfg.log_dir
 
     # Initialize Accelerator for distributed training
     acc = Accelerator(
         mixed_precision=cfg.get("mixed_precision", "no"),  # can be 'fp16', 'bf16', or 'no'
         gradient_accumulation_steps=cfg.get("grad_accum_steps", 1),
         log_with="tensorboard",
+        project_dir=log_dir,
     )
-
-    log_dir = cfg.log_dir
 
     # Only create directories on main process
     if acc.is_main_process:
