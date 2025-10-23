@@ -48,7 +48,7 @@ def main():
     parser.add_argument("--num_workers", type=int, default=4, help="number of workers")
     parser.add_argument(
         "--precompute_f0",
-        type=bool,
+        action="store_true",
         default=False,
         help="only precompute F0 features",
     )
