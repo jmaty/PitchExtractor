@@ -144,9 +144,41 @@ def main():
     # Define model
     model = JDCNet(num_class=1)  # num_class = 1 means regression
 
+    # Automatic learning rate scaling based on number of GPUs
+    base_lr = float(cfg.optimizer_params.lr)
+    # Scale LR linearly with number of GPUs
+    scaled_lr = base_lr * acc.num_processes
+
+    # Adjust warmup based on scaling factor
+    base_pct_start = float(cfg.optimizer_params.pct_start)
+    if acc.num_processes == 1:
+        # Single GPU: use config value
+        pct_start = base_pct_start
+    elif acc.num_processes == 2:
+        # 2 GPUs: minimal or no warmup needed for 2× scaling
+        pct_start = max(base_pct_start, 0.02)  # at least 2% warmup
+    elif acc.num_processes <= 4:
+        # 3-4 GPUs: moderate warmup for stability
+        pct_start = max(base_pct_start, 0.05)  # at least 5% warmup
+    else:
+        # 5+ GPUs: longer warmup for large LR
+        pct_start = max(base_pct_start, 0.1)  # at least 10% warmup
+
+    if acc.is_main_process:
+        warmup_steps = int(pct_start * cfg.epochs * len(train_dataloader))
+        logger.info("Optimizer Configuration")
+        logger.info("-" * 50)
+        logger.info("Base learning rate:           %.6f", base_lr)
+        logger.info("Scaled learning rate:         %.6f", scaled_lr)
+        logger.info("LR scaling factor:            %d", acc.num_processes)
+        logger.info("Warmup percentage:            %.1f%%", pct_start * 100)
+        logger.info("Warmup steps:                 %d", warmup_steps)
+        logger.info("-" * 50)
+        logger.info("")
+
     scheduler_params = {
-        "max_lr": float(cfg["optimizer_params"].get("lr", 5e-4)),
-        "pct_start": float(cfg["optimizer_params"].get("pct_start", 0.0)),
+        "max_lr": scaled_lr,
+        "pct_start": pct_start,
         "epochs": cfg.epochs,
         "steps_per_epoch": len(train_dataloader),
     }
