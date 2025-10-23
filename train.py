@@ -54,6 +54,12 @@ def main():
         default=False,
         help="only precompute F0 features",
     )
+    parser.add_argument(
+        "--skip_check",
+        action="store_true",
+        default=False,
+        help="skip F0 checking",
+    )
     args = parser.parse_args()
 
     cfg = munchify(yaml.safe_load(open(args.config_path, encoding="utf-8")))
@@ -125,18 +131,19 @@ def main():
         logger.info("=" * 50)
         logger.info("")
 
-    # Precompute all F0 for training and validation data
-    if acc.is_main_process:
-        logger.info("Checking if all F0 data is computed...")
-    for _ in enumerate(train_dataloader):
-        continue
-    for _ in enumerate(val_dataloader):
-        continue
-    if acc.is_main_process:
-        logger.info("All F0 data is computed.")
+    if not args.skip_check:
+        # Precompute all F0 for training and validation data
+        if acc.is_main_process:
+            logger.info("Checking if all F0 data is computed...")
+        for _ in enumerate(train_dataloader):
+            continue
+        for _ in enumerate(val_dataloader):
+            continue
+        if acc.is_main_process:
+            logger.info("All F0 data is computed.")
 
     # Exit if only precomputing F0
-    if args.precompute_f0:
+    if args.precompute_f0 and not args.skip_check:
         if acc.is_main_process:
             logger.info("F0 precomputed, exiting.")
         return 0
