@@ -66,7 +66,7 @@ class JDCNet(nn.Module):
             input_size=512,
             hidden_size=256,
             batch_first=True,
-            dropout=0.3,
+            # dropout=0.3,  # in 1-layer LSTM dropout makes no sense
             bidirectional=True,
         )  # (b, 31, 512)
 
@@ -75,7 +75,7 @@ class JDCNet(nn.Module):
             input_size=512,
             hidden_size=256,
             batch_first=True,
-            dropout=0.3,
+            # dropout=0.3,  # in 1-layer LSTM dropout makes no sense
             bidirectional=True,
         )  # (b, 31, 512)
 

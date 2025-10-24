@@ -65,8 +65,8 @@ class MelDataset(torch.utils.data.Dataset):
         output_file = path + "_f0.npy"
         # check if the file exists
         if os.path.isfile(output_file):  # if exists, load it directly
-            if self.verbose:
-                print(f"Loading existing F0 for {path}...")
+            # if self.verbose:
+            #    print(f"Loading existing F0 for {path}...")
             f0 = np.load(output_file)
         else:  # if not exist, create F0 file
             if self.verbose:
