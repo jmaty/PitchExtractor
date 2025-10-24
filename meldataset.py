@@ -122,8 +122,17 @@ class MelDataset(torch.utils.data.Dataset):
 
     def _load_tensor(self, data):
         wave_path = data
-        wave, _ = sf.read(wave_path)
-        wave_tensor = torch.from_numpy(wave).float()
+        wave, sr = sf.read(wave_path)
+        # Resample if needed
+        if sr != self.sr:
+            logger.warning("Resampling %s from %d to %d", wave_path, sr, self.sr)
+            wave_tensor = torch.from_numpy(wave).float()
+            if wave_tensor.dim() == 1:
+                wave_tensor = wave_tensor.unsqueeze(0)
+            resampler = torchaudio.transforms.Resample(sr, self.sr)
+            wave_tensor = resampler(wave_tensor).squeeze(0)
+        else:
+            wave_tensor = torch.from_numpy(wave).float()
         return wave_tensor
 
 
