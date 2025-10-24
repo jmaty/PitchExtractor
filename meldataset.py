@@ -111,8 +111,13 @@ class MelDataset(torch.utils.data.Dataset):
         return mel_tensor, f0, is_silence
 
     def __getitem__(self, idx):
-        data = self.data_list[idx]
-        mel_tensor, f0, is_silence = self.path_to_mel_and_label(data)
+        data = self.data_list[idx].strip()
+        try:
+            mel_tensor, f0, is_silence = self.path_to_mel_and_label(data)
+        except Exception as e:
+            logger.error("Error processing %s", data)
+            logger.error("ERROR: %s", e)
+            raise RuntimeError(f"Error processing {data}") from e
         return mel_tensor, f0, is_silence
 
     def _load_tensor(self, data):
