@@ -38,8 +38,8 @@ class MelDataset(torch.utils.data.Dataset):
         verbose=True,
     ):
 
-        _data_list = [l[:-1].split("|") for l in data_list]
-        self.data_list = [d[0] for d in _data_list]
+        _data_list = [l.strip().split("|") for l in data_list if l.strip()]
+        self.data_list = [d[0] for d in _data_list if d and d[0]]
 
         self.sr = sr
         self.to_melspec = torchaudio.transforms.MelSpectrogram(**MEL_PARAMS)
