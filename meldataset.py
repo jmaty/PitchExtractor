@@ -136,7 +136,7 @@ class MelDataset(torch.utils.data.Dataset):
         return wave_tensor
 
 
-class Collater(object):
+class Collater:
     """
     Args:
       adaptive_batch_size (bool): if true, decrease batch size when long data comes.
@@ -186,9 +186,13 @@ def build_dataloader(
     batch_size=4,
     num_workers=1,
     device="cpu",
-    collate_config={},
-    dataset_config={},
+    collate_config=None,
+    dataset_config=None,
 ):
+    if collate_config is None:
+        collate_config = {}
+    if dataset_config is None:
+        dataset_config = {}
 
     dataset = MelDataset(path_list, validation=validation, **dataset_config)
     collate_fn = Collater(**collate_config)

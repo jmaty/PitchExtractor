@@ -1,16 +1,19 @@
 # coding:utf-8
-import torch
 from functools import reduce
+
+import torch
 from torch.optim import AdamW
 
 
 class MultiOptimizer:
-    def __init__(self, optimizers={}, schedulers={}):
-        self.optimizers = optimizers
-        self.schedulers = schedulers
-        self.keys = list(optimizers.keys())
-        self.param_groups = reduce(
-            lambda x, y: x + y, [v.param_groups for v in self.optimizers.values()]
+    def __init__(self, optimizers=None, schedulers=None):
+        self.optimizers = optimizers if optimizers is not None else {}
+        self.schedulers = schedulers if schedulers is not None else {}
+        self.keys = list(self.optimizers.keys())
+        self.param_groups = (
+            reduce(lambda x, y: x + y, [v.param_groups for v in self.optimizers.values()])
+            if self.optimizers
+            else []
         )
 
     def state_dict(self):
@@ -77,16 +80,12 @@ def _define_scheduler(optimizer, params):
 
 
 def build_multi_optimizer(parameters_dict, scheduler_params):
-    optim = dict(
-        [
-            (key, AdamW(params, lr=1e-4, weight_decay=1e-6, betas=(0.9, 0.98), eps=1e-9))
-            for key, params in parameters_dict.items()
-        ]
-    )
+    optim = {
+        key: AdamW(params, lr=1e-4, weight_decay=1e-6, betas=(0.9, 0.98), eps=1e-9)
+        for key, params in parameters_dict.items()
+    }
 
-    schedulers = dict(
-        [(key, _define_scheduler(opt, scheduler_params)) for key, opt in optim.items()]
-    )
+    schedulers = {key: _define_scheduler(opt, scheduler_params) for key, opt in optim.items()}
 
     multi_optim = MultiOptimizer(optim, schedulers)
     return multi_optim
