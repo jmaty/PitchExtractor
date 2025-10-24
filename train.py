@@ -62,12 +62,20 @@ def main():
     )
     args = parser.parse_args()
 
-    cfg = munchify(yaml.safe_load(open(args.config_path, encoding="utf-8")))
+    # Load config
+    with open(args.config_path, encoding="utf-8") as fr:
+        cfg = munchify(yaml.safe_load(fr))
+
     log_dir = cfg.log_dir
+    mixed_precision = cfg.get("mixed_precision", "bf16")
+
+    # Handle boolean values from YAML parser ("no" is interpreted as False)
+    if isinstance(mixed_precision, bool):
+        mixed_precision = "no" if not mixed_precision else "bf16"
 
     # Initialize Accelerator for distributed training
     acc = Accelerator(
-        mixed_precision=cfg.get("mixed_precision", "no"),  # can be 'fp16', 'bf16', or 'no'
+        mixed_precision=mixed_precision,  # can be 'fp16', 'bf16', or 'no'
         gradient_accumulation_steps=cfg.get("grad_accum_steps", 1),
         # log_with="tensorboard",
         # project_dir=log_dir,
