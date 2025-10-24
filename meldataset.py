@@ -59,6 +59,8 @@ class MelDataset(torch.utils.data.Dataset):
         return len(self.data_list)
 
     def path_to_mel_and_label(self, path):
+        # Load waveform
+        wave_tensor = self._load_tensor(path)
         # use pyworld to get F0
         output_file = path + "_f0.npy"
         # check if the file exists
@@ -69,7 +71,6 @@ class MelDataset(torch.utils.data.Dataset):
         else:  # if not exist, create F0 file
             if self.verbose:
                 print(f"Computing F0 for {path}...")
-            wave_tensor = self._load_tensor(path)
             x = wave_tensor.numpy().astype("double")
             frame_period = MEL_PARAMS["hop_length"] * 1000 / self.sr
             _f0, t = pw.harvest(x, self.sr, frame_period=frame_period)
