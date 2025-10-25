@@ -259,6 +259,11 @@ def main():
             if epoch % cfg.save_freq == 0:
                 trainer.save_checkpoint(osp.join(log_dir, f"epoch_{epoch:05d}.pth"))
 
+    # Clean up distributed resources
+    acc.wait_for_everyone()
+    if writer is not None:
+        writer.close()
+
     return 0
 
 
