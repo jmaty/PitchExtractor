@@ -125,7 +125,7 @@ class MelDataset(torch.utils.data.Dataset):
         wave, sr = sf.read(wave_path)
         # Resample if needed
         if sr != self.sr:
-            logger.warning("Resampling %s from %d to %d", wave_path, sr, self.sr)
+            logger.debug("Resampling %s from %d to %d", wave_path, sr, self.sr)
             wave_tensor = torch.from_numpy(wave).float()
             if wave_tensor.dim() == 1:
                 wave_tensor = wave_tensor.unsqueeze(0)
